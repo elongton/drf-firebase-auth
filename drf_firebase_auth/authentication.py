@@ -9,6 +9,7 @@ Last update: 2019-02-10
 """
 import json
 import uuid
+import re
 
 import firebase_admin
 from firebase_admin import auth as firebase_auth
@@ -177,12 +178,13 @@ class FirebaseAuthentication(BaseFirebaseAuthentication):
             if not api_settings.FIREBASE_CREATE_LOCAL_USER:
                 raise exceptions.AuthenticationFailed(
                     'User is not registered to the application.'
-                )
+                ) 
             username = '_'.join(
                 firebase_user.display_name.split(' ') if firebase_user.display_name \
                 else str(uuid.uuid4())
             )
             username = username if len(username) <= 30 else username[:30]
+            username = self.findLastIncrementedUsername(username)
             new_user = User.objects.create_user(
                 username=username,
                 email=email
@@ -253,3 +255,26 @@ class FirebaseAuthentication(BaseFirebaseAuthentication):
         """
         auth_header_prefix = api_settings.FIREBASE_AUTH_HEADER_PREFIX.lower()
         return '{0} realm="{1}"'.format(auth_header_prefix, self.www_authenticate_realm)
+
+
+
+    def findLastIncrementedUsername(self, username):
+        if self.searchUser(username) is not None:
+            usernumber = self.get_trailing_number(username)
+            if usernumber is None:
+                username = username + '1'
+            else:
+                username = username.replace(str(usernumber),'') + str(usernumber + 1)
+            return self.findLastIncrementedUsername(username)
+        else:
+            print('username' + username)
+            return username
+    def get_trailing_number(self, s):
+        m = re.search(r'\d+$', s)
+        return int(m.group()) if m else None
+    def searchUser(self, userstring):
+        try:
+            return User.objects.get(username=userstring)
+        except:
+            return None
+    
